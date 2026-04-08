@@ -15,15 +15,17 @@ import (
 var cfg config.Config
 
 func main() {
+	// 尝试从 .env 读取配置（本地开发环境）
 	data, err := ioutil.ReadFile(".env")
-	if err != nil {
-		log.Fatal(err)
+	if err == nil {
+		err = yaml.Unmarshal(data, &cfg)
+		if err != nil {
+			log.Fatalf("Failed to parse .env file: %v", err)
+		}
+		fmt.Println("Config loaded successfully from .env file")
+	} else {
+		log.Println("No .env file found, relying on external configuration or platform environment variables")
 	}
-	err = yaml.Unmarshal(data, &cfg)
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Println("Config loaded successfully")
 	fmt.Printf("Translation config: Enable=%v, URL=%s, Model=%s\n", cfg.Translation.Enable, cfg.Translation.URL, cfg.Translation.Model)
 
 	// 初始化日志系统
