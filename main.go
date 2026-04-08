@@ -2,29 +2,43 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"novel-api/api"
 	"novel-api/config"
 	"novel-api/logs"
+	"strings"
 
-	"gopkg.in/yaml.v2"
+	"github.com/spf13/viper"
 )
 
 var cfg config.Config
 
 func main() {
-	// 尝试从 .env 读取配置（本地开发环境）
-	data, err := ioutil.ReadFile(".env")
-	if err == nil {
-		err = yaml.Unmarshal(data, &cfg)
-		if err != nil {
-			log.Fatalf("Failed to parse .env file: %v", err)
-		}
+	// 设置环境变量映射规则 (例如把 a1111_path 映射为 A1111_PATH，把 novel_ai.base_url 映射为 NOVEL_AI_BASE_URL)
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	viper.AutomaticEnv()
+
+	// 1. 读取 .env.example 建立默认键值树，使得 Viper 能感知所有配置层级结构
+	viper.SetConfigFile(".env.example")
+	viper.SetConfigType("yaml")
+	if err := viper.ReadInConfig(); err != nil {
+		log.Printf("Warning: Failed to read .env.example file: %v", err)
+	}
+
+	// 2. 尝试读取实际的 .env 文件覆盖默认配置（本地开发环境）
+	viper.SetConfigFile(".env")
+	viper.SetConfigType("yaml")
+	if err := viper.MergeInConfig(); err == nil {
 		fmt.Println("Config loaded successfully from .env file")
 	} else {
 		log.Println("No .env file found, relying on external configuration or platform environment variables")
+	}
+
+	// 3. 将最终配置（含环境变量覆盖）解析到结构体
+	err := viper.Unmarshal(&cfg)
+	if err != nil {
+		log.Fatalf("Failed to unmarshal config: %v", err)
 	}
 	fmt.Printf("Translation config: Enable=%v, URL=%s, Model=%s\n", cfg.Translation.Enable, cfg.Translation.URL, cfg.Translation.Model)
 
