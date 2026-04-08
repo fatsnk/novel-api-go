@@ -112,7 +112,9 @@ type Config struct {
 
 	// NovelAI 全局配置
 	NovelAI struct {
-		BaseURL string `yaml:"base_url"`
-		Key     string `yaml:"key"`
+		BaseURL     string `yaml:"base_url"`
+		Key         string `yaml:"key"`
+		A1111Path   string `yaml:"a1111_path"`
+		A1111NoSave bool   `yaml:"a1111_no_save"`
 	} `yaml:"novel_ai"`
 }

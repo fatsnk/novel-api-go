@@ -41,12 +41,44 @@ func main() {
 		api.Generations(w, r, &cfg)
 	})
 
-	// A1111 兼容路由 (对外无验证)
-	http.HandleFunc("/sdapi/v1/txt2img", func(w http.ResponseWriter, r *http.Request) {
-		api.A1111Txt2Img(w, r, &cfg)
+	// A1111 兼容路由 (包含动态前缀校验)
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		
+		// 检查静态资源
+		if path == "/" || path == "/logs" {
+			http.ServeFile(w, r, "web/logs.html")
+			return
+		}
+		
+		// 检查 A1111 路由前缀
+		a1111Prefix := ""
+		if cfg.NovelAI.A1111Path != "" {
+			a1111Prefix = "/" + cfg.NovelAI.A1111Path
+		}
+		
+		if len(path) >= len(a1111Prefix)+6 && path[len(a1111Prefix):len(a1111Prefix)+6] == "/sdapi" {
+			if a1111Prefix != "" && path[:len(a1111Prefix)] != a1111Prefix {
+				http.Error(w, "Unauthorized: Invalid subpath", http.StatusUnauthorized)
+				return
+			}
+			
+			subPath := path[len(a1111Prefix):]
+			switch subPath {
+			case "/sdapi/v1/txt2img":
+				api.A1111Txt2Img(w, r, &cfg)
+			case "/sdapi/v1/sd-models":
+				api.A1111Models(w, r)
+			case "/sdapi/v1/progress":
+				api.A1111Progress(w, r)
+			default:
+				http.NotFound(w, r)
+			}
+			return
+		}
+		
+		http.NotFound(w, r)
 	})
-	http.HandleFunc("/sdapi/v1/sd-models", api.A1111Models)
-	http.HandleFunc("/sdapi/v1/progress", api.A1111Progress)
 
 	// 日志管理API路由
 	http.HandleFunc("/api/login", func(w http.ResponseWriter, r *http.Request) {
@@ -75,13 +107,6 @@ func main() {
 	}
 	http.Handle("/images/", http.StripPrefix("/images/", http.FileServer(http.Dir(localPath))))
 
-	// 前端页面路由
-	http.HandleFunc("/logs", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "web/logs.html")
-	})
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "web/logs.html")
-	})
 
 	log.Println("Starting server on : ", cfg.Server.Addr)
 	log.Println("日志查询页面: http://localhost:" + cfg.Server.Addr + "/logs")

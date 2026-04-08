@@ -754,6 +754,14 @@
                     <label for="novelAiKey">默认 NovelAI API Key</label>
                     <input type="password" id="novelAiKey" placeholder="默认使用的Token">
                 </div>
+                <div class="form-group">
+                    <label for="novelAiA1111Path">A1111 接口安全子路径 (留空则无限制)</label>
+                    <input type="text" id="novelAiA1111Path" placeholder="例如输入 subpath，则接口变为 /subpath/sdapi/v1/txt2img">
+                </div>
+                <div class="form-group" style="display: flex; align-items: center; gap: 10px;">
+                    <input type="checkbox" id="novelAiA1111NoSave" style="width: auto;">
+                    <label for="novelAiA1111NoSave" style="margin-bottom: 0;">A1111请求不保存图片并直接返回(省存储及性能)</label>
+                </div>
                 <button type="button" class="btn" onclick="saveSettings()">保存设置</button>
             </form>
         </div>
@@ -1039,6 +1047,8 @@
                 if (data.success) {
                     document.getElementById('novelAiUrl').value = data.data.novel_ai_base_url || '';
                     document.getElementById('novelAiKey').value = data.data.novel_ai_key || '';
+                    document.getElementById('novelAiA1111Path').value = data.data.novel_ai_a1111_path || '';
+                    document.getElementById('novelAiA1111NoSave').checked = data.data.novel_ai_a1111_no_save || false;
                 }
             } catch (error) {
                 console.error('获取配置失败:', error);
@@ -1054,6 +1064,8 @@
         async function saveSettings() {
             const url = document.getElementById('novelAiUrl').value;
             const key = document.getElementById('novelAiKey').value;
+            const path = document.getElementById('novelAiA1111Path').value;
+            const noSave = document.getElementById('novelAiA1111NoSave').checked;
             
             try {
                 const response = await fetch(`${API_BASE}/api/config`, {
@@ -1064,7 +1076,9 @@
                     },
                     body: JSON.stringify({
                         novel_ai_base_url: url,
-                        novel_ai_key: key
+                        novel_ai_key: key,
+                        novel_ai_a1111_path: path,
+                        novel_ai_a1111_no_save: noSave
                     })
                 });
                 

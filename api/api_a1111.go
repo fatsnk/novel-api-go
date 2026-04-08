@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"novel-api/config"
 	"novel-api/models"
+	"strings"
 	"time"
 )
 
@@ -124,37 +125,18 @@ func A1111Txt2Img(w http.ResponseWriter, r *http.Request, cfg *config.Config) {
 		},
 	}
 
-	// 7. 标识这是 DALL-E 格式请求 (DALL-E格式的响应包含 JSON {"data":[{"url":"..."}]}，与部分A1111兼容插件接受的格式类似或方便解析)
-	// 其实 A1111 标准返回是 {"images": ["base64..."], "parameters": {}, "info": "{}"}
-	// 为了最快接入并由于我们已经有上传器返回了 URL，如果调用方接受 URL，我们可以先返回类似结构，
-	// 如果必须返回 Base64，我们可能需要修改模型函数以返回 Base64 而非上传。
-	// 这里先复用 isDallRequest=true 的处理逻辑，即返回 JSON URL 响应。
-	
-	// 因为我们没有提供原生的A1111完整返回格式（全是base64），我们借助 isDallRequest 来返回JSON对象。
-	// 但实际上 A1111 api 需要返回 {"images": ["base64string"]}，我们现在的 Nai3WithFormatAndSize 默认上传并返回 URL。
-	// 如果客户端能接受 URL 尚可，严格的A1111客户端需要 images 数组包含 base64。
-	// 这里我们还是复用现有的 isDallRequest 逻辑（返回 URL），如果后续客户端不兼容，可以在 models 中增加跳过上传直接返回 base64 的逻辑。
+	// 7. 标识这是 DALL-E 格式请求 (用于一些早期的兼容逻辑，现在我们在模型内部通过 r.URL.Path 判断A1111)
 	isDallRequest := true
 
-	// 调用对应模型的生成函数
-	switch modelName {
-	case "nai-diffusion-3":
+	// 8. 路由到对应的模型生成函数 (V3 或 V4/V4.5)
+	// 根据您的要求：如果模型名称包含 "3"，走 V3 逻辑；否则（其他所有模型名，如带 4 或更新的名称）默认走 V4(最新) 逻辑。
+
+	if strings.Contains(modelName, "-3") {
+		log.Printf("Routing model '%s' to V3 logic", modelName)
 		models.Nai3WithFormatAndSize(w, r, compatibleReq, seed, base64String, tempCfg.NovelAI.Key, &tempCfg, userInput, width, height, isDallRequest)
-	case "nai-diffusion-furry-3":
-		models.Nai3WithFormatAndSize(w, r, compatibleReq, seed, base64String, tempCfg.NovelAI.Key, &tempCfg, userInput, width, height, isDallRequest)
-	case "nai-diffusion-4-full":
+	} else {
+		log.Printf("Routing model '%s' to V4/Latest logic", modelName)
 		models.Nai4WithFormatAndSize(w, r, compatibleReq, seed, base64String, tempCfg.NovelAI.Key, &tempCfg, userInput, nil, width, height, isDallRequest)
-	case "nai-diffusion-4-curated-preview":
-		models.Nai4WithFormatAndSize(w, r, compatibleReq, seed, base64String, tempCfg.NovelAI.Key, &tempCfg, userInput, nil, width, height, isDallRequest)
-	case "nai-diffusion-4-5-curated":
-		models.Nai4WithFormatAndSize(w, r, compatibleReq, seed, base64String, tempCfg.NovelAI.Key, &tempCfg, userInput, nil, width, height, isDallRequest)
-	case "nai-diffusion-4-5-full":
-		models.Nai4WithFormatAndSize(w, r, compatibleReq, seed, base64String, tempCfg.NovelAI.Key, &tempCfg, userInput, nil, width, height, isDallRequest)
-	default:
-		// 如果匹配不到，降级为默认模型
-		log.Printf("Unknown A1111 model override '%s', falling back to nai-diffusion-3", modelName)
-		compatibleReq.Model = "nai-diffusion-3"
-		models.Nai3WithFormatAndSize(w, r, compatibleReq, seed, base64String, tempCfg.NovelAI.Key, &tempCfg, userInput, width, height, isDallRequest)
 	}
 }
 

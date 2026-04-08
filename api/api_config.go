@@ -2,9 +2,13 @@ package api
 
 import (
 	"encoding/json"
+	"io/ioutil"
+	"log"
 	"net/http"
 	"novel-api/config"
 	"strings"
+
+	"gopkg.in/yaml.v2"
 )
 
 // ConfigResponse 配置查询响应
@@ -15,14 +19,18 @@ type ConfigResponse struct {
 }
 
 type ConfigData struct {
-	NovelAIBaseURL string `json:"novel_ai_base_url"`
-	NovelAIKey     string `json:"novel_ai_key"`
+	NovelAIBaseURL     string `json:"novel_ai_base_url"`
+	NovelAIKey         string `json:"novel_ai_key"`
+	NovelAIA1111Path   string `json:"novel_ai_a1111_path"`
+	NovelAIA1111NoSave bool   `json:"novel_ai_a1111_no_save"`
 }
 
 // ConfigUpdateRequest 配置更新请求
 type ConfigUpdateRequest struct {
-	NovelAIBaseURL string `json:"novel_ai_base_url"`
-	NovelAIKey     string `json:"novel_ai_key"`
+	NovelAIBaseURL     string `json:"novel_ai_base_url"`
+	NovelAIKey         string `json:"novel_ai_key"`
+	NovelAIA1111Path   string `json:"novel_ai_a1111_path"`
+	NovelAIA1111NoSave bool   `json:"novel_ai_a1111_no_save"`
 }
 
 // GetConfig 获取配置API
@@ -53,8 +61,10 @@ func GetConfig(w http.ResponseWriter, r *http.Request, cfg *config.Config) {
 	response := ConfigResponse{
 		Success: true,
 		Data: ConfigData{
-			NovelAIBaseURL: cfg.NovelAI.BaseURL,
-			NovelAIKey:     cfg.NovelAI.Key,
+			NovelAIBaseURL:     cfg.NovelAI.BaseURL,
+			NovelAIKey:         cfg.NovelAI.Key,
+			NovelAIA1111Path:   cfg.NovelAI.A1111Path,
+			NovelAIA1111NoSave: cfg.NovelAI.A1111NoSave,
 		},
 	}
 	json.NewEncoder(w).Encode(response)
@@ -98,6 +108,21 @@ func UpdateConfig(w http.ResponseWriter, r *http.Request, cfg *config.Config) {
 	// 更新内存中的配置
 	cfg.NovelAI.BaseURL = req.NovelAIBaseURL
 	cfg.NovelAI.Key = req.NovelAIKey
+	cfg.NovelAI.A1111Path = strings.Trim(req.NovelAIA1111Path, "/")
+	cfg.NovelAI.A1111NoSave = req.NovelAIA1111NoSave
+
+	// 将配置持久化到 .env (YAML格式) 文件
+	data, err := yaml.Marshal(cfg)
+	if err == nil {
+		err = ioutil.WriteFile(".env", data, 0644)
+		if err != nil {
+			log.Printf("Failed to save config to .env: %v", err)
+		} else {
+			log.Printf("Config successfully saved to .env")
+		}
+	} else {
+		log.Printf("Failed to marshal config: %v", err)
+	}
 
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,

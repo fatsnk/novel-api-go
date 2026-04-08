@@ -196,44 +196,51 @@ func Nai3WithFormatAndSize(w http.ResponseWriter, r *http.Request, req config.Ch
 			log.Printf("图像数据读取成功，大小: %d bytes", len(imageData))
 
 			var outputs string
+			var publicLink string
 
-			// 使用通用上传函数上传图片
-			log.Printf("开始上传图片: %s", imageName)
+			isA1111 := strings.Contains(r.URL.Path, "sdapi")
 
-			// 调用通用上传函数
-			response, err := upload.UploadFile(imageData, imageName, cfg)
-			if err != nil {
-				log.Printf("图片上传失败: %v", err)
-				outputs = fmt.Sprintf("error: 上传失败 - %s", imageName) // 如果上传失败，返回错误信息
-
-				// 记录失败日志
-				logs.LogImage(logs.ImageLog{
-					Model:    req.Model,
-					Prompt:   userInput,
-					ImageURL: "",
-					UserIP:   r.RemoteAddr,
-					Status:   "failed",
-					Error:    fmt.Sprintf("上传失败: %v", err),
-				})
+			if isA1111 && cfg.NovelAI.A1111NoSave {
+				log.Printf("A1111请求并且配置了不保存图片，跳过上传并直接返回Base64")
 			} else {
-				log.Printf("图片上传成功: %s", response.Data.URL)
-				outputs = response.Data.URL
+				// 使用通用上传函数上传图片
+				log.Printf("开始上传图片: %s", imageName)
 
-				// 记录成功日志
-				logs.LogImage(logs.ImageLog{
-					Model:    req.Model,
-					Prompt:   userInput,
-					ImageURL: outputs,
-					UserIP:   r.RemoteAddr,
-					Status:   "success",
-				})
+				// 调用通用上传函数
+				response, err := upload.UploadFile(imageData, imageName, cfg)
+				if err != nil {
+					log.Printf("图片上传失败: %v", err)
+					outputs = fmt.Sprintf("error: 上传失败 - %s", imageName) // 如果上传失败，返回错误信息
+
+					// 记录失败日志
+					logs.LogImage(logs.ImageLog{
+						Model:    req.Model,
+						Prompt:   userInput,
+						ImageURL: "",
+						UserIP:   r.RemoteAddr,
+						Status:   "failed",
+						Error:    fmt.Sprintf("上传失败: %v", err),
+					})
+				} else {
+					log.Printf("图片上传成功: %s", response.Data.URL)
+					outputs = response.Data.URL
+
+					// 记录成功日志
+					logs.LogImage(logs.ImageLog{
+						Model:    req.Model,
+						Prompt:   userInput,
+						ImageURL: outputs,
+						UserIP:   r.RemoteAddr,
+						Status:   "success",
+					})
+				}
+
+				publicLink = fmt.Sprintf("![%s](%s)", imageName, outputs)
+				fmt.Println(publicLink)
 			}
 
-			publicLink := fmt.Sprintf("![%s](%s)", imageName, outputs)
-			fmt.Println(publicLink)
-
 			// 根据请求类型决定响应格式
-			if strings.Contains(r.URL.Path, "sdapi") {
+			if isA1111 {
 				// A1111 格式响应，直接返回 Base64 数组
 				base64Image := base64.StdEncoding.EncodeToString(imageData)
 				a1111Response := map[string]interface{}{
