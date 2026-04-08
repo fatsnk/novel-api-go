@@ -4,6 +4,8 @@
 
 一个基于 Go 语言开发的 AI 图像生成 API 服务，支持 NovelAI Diffusion 模型（v3 和 v4），集成智能翻译功能、多种云存储服务和完整的日志查询系统。
 
+> 💡 **提示**：如果是部署在 Railway 或 Render 等需要配置扁平化环境变量的云平台，可以直接参考使用 [RAILWAY_ENV_EXAMPLE.txt](RAILWAY_ENV_EXAMPLE.txt) 中提供的环境变量格式，支持完全复制粘贴配置。
+
 ## 🚀 功能特性
 
 ### 🎨 AI 图像生成
