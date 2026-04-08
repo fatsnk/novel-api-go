@@ -89,8 +89,8 @@ func A1111Txt2Img(w http.ResponseWriter, r *http.Request, cfg *config.Config) {
 	tempCfg.Parameters.Steps = steps
 	tempCfg.Parameters.Scale = cfgScale
 	
-	// 如果提供了负面提示词，覆盖默认的
-	if req.NegativePrompt != "" {
+	// 如果提供了负面提示词并且不为空，覆盖默认的
+	if strings.TrimSpace(req.NegativePrompt) != "" {
 		tempCfg.Parameters.CustomAntiWords = req.NegativePrompt
 	}
 
