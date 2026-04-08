@@ -1,5 +1,7 @@
 # Novel API - AI 图像生成服务
 
+复刻自 xiaopalu-max/novel-api-go，添加了stable diffusion webui 兼容api接口（A1111）,并支持本地存储。
+
 一个基于 Go 语言开发的 AI 图像生成 API 服务，支持 NovelAI Diffusion 模型（v3 和 v4），集成智能翻译功能、多种云存储服务和完整的日志查询系统。
 
 ## 🚀 功能特性
