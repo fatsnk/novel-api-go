@@ -12,15 +12,16 @@ import (
 
 // A1111Txt2ImgRequest 兼容 A1111 sdapi/v1/txt2img 的请求结构
 type A1111Txt2ImgRequest struct {
-	Prompt         string  `json:"prompt"`
-	NegativePrompt string  `json:"negative_prompt,omitempty"`
-	Steps          int     `json:"steps,omitempty"`
-	Width          int     `json:"width,omitempty"`
-	Height         int     `json:"height,omitempty"`
-	SamplerName    string  `json:"sampler_name,omitempty"`
-	CfgScale       float64 `json:"cfg_scale,omitempty"`
-	Seed           int     `json:"seed,omitempty"`
-	BatchSize      int     `json:"batch_size,omitempty"`
+	Prompt           string                 `json:"prompt"`
+	NegativePrompt   string                 `json:"negative_prompt,omitempty"`
+	Steps            int                    `json:"steps,omitempty"`
+	Width            int                    `json:"width,omitempty"`
+	Height           int                    `json:"height,omitempty"`
+	SamplerName      string                 `json:"sampler_name,omitempty"`
+	CfgScale         float64                `json:"cfg_scale,omitempty"`
+	Seed             int                    `json:"seed,omitempty"`
+	BatchSize        int                    `json:"batch_size,omitempty"`
+	OverrideSettings map[string]interface{} `json:"override_settings,omitempty"`
 	// 可根据需要添加其他 A1111 支持的参数，当前仅提取影响NovelAI生成的关键参数
 }
 
@@ -103,8 +104,13 @@ func A1111Txt2Img(w http.ResponseWriter, r *http.Request, cfg *config.Config) {
 		base64String, _ = ImageURLToBase64(imageURLS)
 	}
 
-	// 6. 使用默认配置模型 nai-diffusion-3
-	modelName := "nai-diffusion-3"
+	// 6. 确定使用的模型
+	modelName := "nai-diffusion-3" // 默认模型
+	if override, ok := req.OverrideSettings["sd_model_checkpoint"]; ok {
+		if modelStr, ok := override.(string); ok && modelStr != "" {
+			modelName = modelStr
+		}
+	}
 
 	// 构建兼容的 ChatRequest 结构
 	compatibleReq := config.ChatRequest{
@@ -130,8 +136,26 @@ func A1111Txt2Img(w http.ResponseWriter, r *http.Request, cfg *config.Config) {
 	// 这里我们还是复用现有的 isDallRequest 逻辑（返回 URL），如果后续客户端不兼容，可以在 models 中增加跳过上传直接返回 base64 的逻辑。
 	isDallRequest := true
 
-	// 调用 Nai3
-	models.Nai3WithFormatAndSize(w, r, compatibleReq, seed, base64String, tempCfg.NovelAI.Key, &tempCfg, userInput, width, height, isDallRequest)
+	// 调用对应模型的生成函数
+	switch modelName {
+	case "nai-diffusion-3":
+		models.Nai3WithFormatAndSize(w, r, compatibleReq, seed, base64String, tempCfg.NovelAI.Key, &tempCfg, userInput, width, height, isDallRequest)
+	case "nai-diffusion-furry-3":
+		models.Nai3WithFormatAndSize(w, r, compatibleReq, seed, base64String, tempCfg.NovelAI.Key, &tempCfg, userInput, width, height, isDallRequest)
+	case "nai-diffusion-4-full":
+		models.Nai4WithFormatAndSize(w, r, compatibleReq, seed, base64String, tempCfg.NovelAI.Key, &tempCfg, userInput, nil, width, height, isDallRequest)
+	case "nai-diffusion-4-curated-preview":
+		models.Nai4WithFormatAndSize(w, r, compatibleReq, seed, base64String, tempCfg.NovelAI.Key, &tempCfg, userInput, nil, width, height, isDallRequest)
+	case "nai-diffusion-4-5-curated":
+		models.Nai4WithFormatAndSize(w, r, compatibleReq, seed, base64String, tempCfg.NovelAI.Key, &tempCfg, userInput, nil, width, height, isDallRequest)
+	case "nai-diffusion-4-5-full":
+		models.Nai4WithFormatAndSize(w, r, compatibleReq, seed, base64String, tempCfg.NovelAI.Key, &tempCfg, userInput, nil, width, height, isDallRequest)
+	default:
+		// 如果匹配不到，降级为默认模型
+		log.Printf("Unknown A1111 model override '%s', falling back to nai-diffusion-3", modelName)
+		compatibleReq.Model = "nai-diffusion-3"
+		models.Nai3WithFormatAndSize(w, r, compatibleReq, seed, base64String, tempCfg.NovelAI.Key, &tempCfg, userInput, width, height, isDallRequest)
+	}
 }
 
 // A1111Models 处理 A1111 兼容的模型列表请求
@@ -167,6 +191,27 @@ func A1111Models(w http.ResponseWriter, r *http.Request) {
 			"hash":       "furry3",
 			"sha256":     "furry3",
 			"filename":   "nai-diffusion-furry-3",
+		},
+		{
+			"title":      "nai-diffusion-4-curated-preview",
+			"model_name": "nai-diffusion-4-curated-preview",
+			"hash":       "nai4cp",
+			"sha256":     "nai4cp",
+			"filename":   "nai-diffusion-4-curated-preview",
+		},
+		{
+			"title":      "nai-diffusion-4-5-curated",
+			"model_name": "nai-diffusion-4-5-curated",
+			"hash":       "nai45c",
+			"sha256":     "nai45c",
+			"filename":   "nai-diffusion-4-5-curated",
+		},
+		{
+			"title":      "nai-diffusion-4-5-full",
+			"model_name": "nai-diffusion-4-5-full",
+			"hash":       "nai45f",
+			"sha256":     "nai45f",
+			"filename":   "nai-diffusion-4-5-full",
 		},
 	}
 
