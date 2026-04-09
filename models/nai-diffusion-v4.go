@@ -271,10 +271,13 @@ func Nai4WithFormatAndSize(w http.ResponseWriter, r *http.Request, req config.Ch
 	log.Printf("NAI-4 image will be processed as: %s", imageName)
 
 	// 提取指定的图像文件并直接上传到存储服务
+	var foundImage bool
 	for _, file := range zipReader.File {
-		if file.Name == "image_0.png" { // 根据实际文件名进行匹配
-			// 打开 ZIP 中的文件
-			srcFile, err := file.Open()
+	        log.Printf("NAI-4 ZIP contains file: %s (size: %d bytes)", file.Name, file.UncompressedSize64)
+	        if strings.HasSuffix(strings.ToLower(file.Name), ".png") { // 只要是png图片就处理
+	                foundImage = true
+	                // 打开 ZIP 中的文件
+	                srcFile, err := file.Open()
 			if err != nil {
 				http.Error(w, "打开 ZIP 中的文件失败: "+err.Error(), http.StatusInternalServerError)
 				log.Printf("打开 ZIP 中的文件失败: %v", err)
@@ -337,39 +340,56 @@ func Nai4WithFormatAndSize(w http.ResponseWriter, r *http.Request, req config.Ch
 
 			// 根据请求类型决定响应格式
 			if isA1111 {
-				// A1111 格式响应，直接返回 Base64 数组
-				base64Image := base64.StdEncoding.EncodeToString(imageData)
-				a1111Response := map[string]interface{}{
-					"images": []string{base64Image},
-					"parameters": map[string]interface{}{},
-					"info":       "{}",
-				}
-				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(a1111Response)
+			        // A1111 格式响应，直接返回 Base64 数组
+			        base64Image := base64.StdEncoding.EncodeToString(imageData)
+			        a1111Response := map[string]interface{}{
+			                "images": []string{base64Image},
+			                "parameters": map[string]interface{}{},
+			                "info":       "{}",
+			        }
+			        
+			        // 记录返回日志，截断 base64
+			        logResp := map[string]interface{}{
+			                "images": []string{fmt.Sprintf("<base64 data, length: %d>", len(base64Image))},
+			                "parameters": a1111Response["parameters"],
+			                "info":       a1111Response["info"],
+			        }
+			        logBytes, _ := json.Marshal(logResp)
+			        log.Printf("Sending A1111 response: %s", string(logBytes))
+
+			        w.Header().Set("Content-Type", "application/json")
+			        if err := json.NewEncoder(w).Encode(a1111Response); err != nil {
+			                log.Printf("A1111 Response Write Error: %v", err)
+			        }
 			} else if isDallRequest {
 				// DALL-E 格式响应
 				dallResponse := map[string]interface{}{
-					"data": []map[string]interface{}{
-						{
-							"url": outputs,
-						},
-					},
-					"created": timestamp,
-					"usage": map[string]interface{}{
-						"prompt_tokens":     0,
-						"completion_tokens": 0,
-						"total_tokens":      16384,
-						"prompt_tokens_details": map[string]interface{}{
-							"cached_tokens_details": map[string]interface{}{},
-						},
-						"completion_tokens_details": map[string]interface{}{},
-						"output_tokens":             16384,
-					},
+				        "data": []map[string]interface{}{
+				                {
+				                        "url": outputs,
+				                },
+				        },
+				        "created": timestamp,
+				        "usage": map[string]interface{}{
+				                "prompt_tokens":     0,
+				                "completion_tokens": 0,
+				                "total_tokens":      16384,
+				                "prompt_tokens_details": map[string]interface{}{
+				                        "cached_tokens_details": map[string]interface{}{},
+				                },
+				                "completion_tokens_details": map[string]interface{}{},
+				                "output_tokens":             16384,
+				        },
 				}
 
+				dallBytes, _ := json.Marshal(dallResponse)
+				log.Printf("Sending DALL-E response: %s", string(dallBytes))
+
 				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(dallResponse)
-			} else {
+				if err := json.NewEncoder(w).Encode(dallResponse); err != nil {
+				        log.Printf("DALL-E Response Write Error: %v", err)
+				}
+} else {
 				// 原有的流式聊天响应格式
 				sseResponse := fmt.Sprintf(
 					"data: {\"id\":\"%s\",\"object\":\"chat.completion.chunk\",\"created\":%d,\"model\":\"%s\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"%s\"},\"logprobs\":null,\"finish_reason\":null}]}\n\n",
@@ -381,14 +401,20 @@ func Nai4WithFormatAndSize(w http.ResponseWriter, r *http.Request, req config.Ch
 
 				w.Header().Set("Content-Type", "text/event-stream")
 				w.Write([]byte(sseResponse))
-				w.(http.Flusher).Flush() // 刷新响应缓冲区到客户端
-			}
-			break
-		}
-	}
+				        w.(http.Flusher).Flush() // 刷新响应缓冲区到客户端
+				}
+				break // 只处理第一张图片
+}
+}
 
-	// 如果不是 DALL-E 请求，则结束流式输出
-	if !isDallRequest {
+if !foundImage {
+log.Printf("NAI-4 Error: No PNG image found in the ZIP file!")
+http.Error(w, "No image found in API response ZIP", http.StatusInternalServerError)
+return
+}
+
+// 如果不是 DALL-E 请求，则结束流式输出
+if !isDallRequest {
 		w.Write([]byte("event: end\n\n"))
 		w.(http.Flusher).Flush() // 刷新最后一条消息
 	}
